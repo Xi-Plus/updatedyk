@@ -115,7 +115,7 @@ class DYKEntry(object):
 				r'<!--.*?-->', u'', self.template.params[u'nominator'])
 			if not self.get_timestamp():
 				self.template.params[u'timestamp'] = str(int(time()))
-			self.template.params[u'hash'] = unicode(self.hash_str())
+			self.template.params[u'hash'] = str(self.hash_str())
 		else:
 			self.broken = True
 			self.tail = clean_tail_newsection(content.rstrip())
@@ -130,7 +130,7 @@ class DYKEntry(object):
 			return u'\n' + (((
 				(u'=== %d月%d日 ===\n' % (ts.month, ts.day)
 				 ) if self.new_date_section else u''
-			) + u'==== ====\n') if withheader else u'') + unicode(self.template) + self.tail + (
+			) + u'==== ====\n') if withheader else u'') + str(self.template) + self.tail + (
 				u'\n\n==== ====\n{{DYKCsplit}}' if withheader else u''
 			)
 
@@ -283,7 +283,7 @@ class DYKCPage(object):
 	def __unicode__(self):
 		r = self.header
 		for entry in self.entries:
-			r += unicode(entry)
+			r += str(entry)
 		return r
 
 
@@ -308,7 +308,7 @@ class DYKPage(object):
 
 	def __unicode__(self):
 		self.save_entries()
-		return self.head + unicode(self.template) + self.tail
+		return self.head + str(self.template) + self.tail
 
 	def build_entries(self):
 		self.entries = [
@@ -380,7 +380,7 @@ def maintenance(bot=None):
 	dykc_cur = dykc.current
 	dykc_cont = dykc_cur.content
 	dykc_page = DYKCPage(dykc_cont, bot, clean=True, quick=False)
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
 		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True)
 	except PageNotSaved:
@@ -403,7 +403,7 @@ def hashremoval(dykc, entryhash, debug, error_log, user):
 			continue
 		if entry.hash_str() in entryhash:
 			entry.removed = True
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
 		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True,
 						 comment='hashremoval: ' + ', '.join(entryhash))
@@ -473,7 +473,7 @@ def main(debug=False, error_log=None):
 			# check_result checks passed, rejected, and .broken as well
 			result = entry.check_result(bot, u'Wikipedia:新条目推荐/候选', debug)
 			if debug:
-				print(result, 'BROKEN' if entry.broken else unicode(entry.template))
+				print(result, 'BROKEN' if entry.broken else str(entry.template))
 			if result is None:
 				continue
 			elif result:
@@ -555,7 +555,7 @@ def main(debug=False, error_log=None):
 				# Avoid doing this on a blank content?
 				talkpage_cont = dykinvite_re.sub(u'', talkpage_cont)
 				entry.template.name = u'DYKEntry/archive'
-				entry.template.params[u'revid'] = unicode(dykc_cur.id)
+				entry.template.params[u'revid'] = str(dykc_cur.id)
 				entry.template.params[u'closets'] = '{{subst:#time:U}}'
 				talkpage_ncont = u'{{DYKtalk|%d年|%d月%d日}}' % (
 					now.year, now.month, now.day)
@@ -578,7 +578,7 @@ def main(debug=False, error_log=None):
 					prependtext=u'* %s\n' % entry.template.params['question'],
 				)
 				entry.template.name = u'DYKEntry/archive'
-				entry.template.params[u'revid'] = unicode(dykc_cur.id)
+				entry.template.params[u'revid'] = str(dykc_cur.id)
 				entry.template.params[u'closets'] = '{{subst:#time:U}}'
 				entry.template.params[u'rejected'] = u'rejected'
 				if debug:
@@ -622,10 +622,10 @@ def main(debug=False, error_log=None):
 			recent += Revision(u'')
 		if debug:
 			print('updating dyk page')
-		dyk += Revision(unicode(dyk_page))
+		dyk += Revision(str(dyk_page))
 	if debug:
 		print('updating dykc page')
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
 		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True)
 	except PageNotSaved:

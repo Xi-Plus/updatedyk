@@ -3,8 +3,10 @@
 
 # NOTE: use assert if sending requests manually?
 
-from wmfwikis import getSite
-from mw import *
+# from wmfwikis import getSite
+import pywikibot
+from pywikibot.data.api import Request
+# from mw import *
 from datetime import datetime, timedelta
 from time import time
 import re
@@ -115,7 +117,7 @@ class DYKEntry(object):
 				r'<!--.*?-->', u'', self.template.params[u'nominator'])
 			if not self.get_timestamp():
 				self.template.params[u'timestamp'] = str(int(time()))
-			self.template.params[u'hash'] = unicode(self.hash_str())
+			self.template.params[u'hash'] = str(self.hash_str())
 		else:
 			self.broken = True
 			self.tail = clean_tail_newsection(content.rstrip())
@@ -130,7 +132,7 @@ class DYKEntry(object):
 			return u'\n' + (((
 				(u'=== %d月%d日 ===\n' % (ts.month, ts.day)
 				 ) if self.new_date_section else u''
-			) + u'==== ====\n') if withheader else u'') + unicode(self.template) + self.tail + (
+			) + u'==== ====\n') if withheader else u'') + str(self.template) + self.tail + (
 				u'\n\n==== ====\n{{DYKCsplit}}' if withheader else u''
 			)
 
@@ -210,7 +212,8 @@ class DYKEntry(object):
 			if debug:
 				print('check badstage-')
 			return None
-		apires = site._apiRequest(
+		apires = list(Request(
+			site=site,
 			action='query',
 			prop='revisions',
 			titles=page,
@@ -218,7 +221,7 @@ class DYKEntry(object):
 			rvprop='user|comment',
 			rvdir='newer',
 			rvstart=timestamp.strftime('%Y%m%d%H%M%S'),
-		)['query']['pages'].values()[0]
+		).submit()['query']['pages'].values())[0]
 		if 'revisions' not in apires:
 			if debug:
 				print('check norev')
@@ -229,7 +232,8 @@ class DYKEntry(object):
 				print('check badcomment')
 			return None
 		# Validate sysop right
-		apires = site._apiRequest(
+		apires = Request(
+			site=site,
 			action='query',
 			list='users',
 			ususers=apires['user'],
@@ -252,7 +256,7 @@ class DYKCPage(object):
 		parts = re.split(r'\n\{\{ ?DYKEntry', content)
 		self.header = clean_tail_newsection(parts[0].strip())
 		parts = parts[1:]
-		for i in xrange(len(parts)):
+		for i in range(len(parts)):
 			parts[i] = u'{{ DYKEntry' + parts[i]
 		self.entries = [DYKEntry(x.strip(), site, clean, quick) for x in parts]
 		if not clean:
@@ -283,7 +287,7 @@ class DYKCPage(object):
 	def __unicode__(self):
 		r = self.header
 		for entry in self.entries:
-			r += unicode(entry)
+			r += str(entry)
 		return r
 
 
@@ -308,7 +312,7 @@ class DYKPage(object):
 
 	def __unicode__(self):
 		self.save_entries()
-		return self.head + unicode(self.template) + self.tail
+		return self.head + str(self.template) + self.tail
 
 	def build_entries(self):
 		self.entries = [
@@ -317,11 +321,11 @@ class DYKPage(object):
 				image=self.template.params[u'p%d' % x],
 				type=self.template.params[u't%d' % x],
 			)
-			for x in xrange(6)
+			for x in range(6)
 		]
 
 	def save_entries(self):
-		for x in xrange(6):
+		for x in range(6):
 			self.template.params[u'%d' % x] = self.entries[x]['question']
 			self.template.params[u'p%d' % x] = self.entries[x]['image']
 			self.template.params[u't%d' % x] = self.entries[x]['type']
@@ -372,17 +376,17 @@ def change_template(site, pagename, regex, replace, default=None, append=True):
 
 def maintenance(bot=None):
 	if not bot:
-		bot = getSite('zh', 'wikipedia', 'bot',
-					  apiErrorAutoRetries=10, httpErrorAutoRetries=50)
-	dykc = bot(u'Wikipedia:新条目推荐/候选')
-	dykclist = bot(u'Wikipedia:新条目推荐/候选/列表')
+		site = pywikibot.Site()
+		site.login()
+		bot = site
+	dykc = pywikibot.Page(bot, u'Wikipedia:新条目推荐/候选')
+	dykclist = pywikibot.Page(bot,u'Wikipedia:新条目推荐/候选/列表')
 	# Grab DYKC content
-	dykc_cur = dykc.current
-	dykc_cont = dykc_cur.content
+	dykc_cont = dykc.text
 	dykc_page = DYKCPage(dykc_cont, bot, clean=True, quick=False)
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
-		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True)
+		dykc.text += dykc_newcont
 	except PageNotSaved:
 		maintenance(bot)
 	else:
@@ -403,7 +407,7 @@ def hashremoval(dykc, entryhash, debug, error_log, user):
 			continue
 		if entry.hash_str() in entryhash:
 			entry.removed = True
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
 		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True,
 						 comment='hashremoval: ' + ', '.join(entryhash))
@@ -412,20 +416,21 @@ def hashremoval(dykc, entryhash, debug, error_log, user):
 
 
 def main(debug=False, error_log=None):
-	bot = getSite('zh', 'wikipedia', 'bot',
-				  apiErrorAutoRetries=10, httpErrorAutoRetries=50)
-	sysop = getSite('zh', 'wikipedia', 'sysop',
-					apiErrorAutoRetries=10, httpErrorAutoRetries=50)
-	dyk = sysop(u'Template:Dyk')
-	dykc = bot(u'Wikipedia:新条目推荐/候选')
-	recent = bot(u'Wikipedia:新条目推荐/上一次更新')
+	site = pywikibot.Site()
+	site.login()
+	bot = site
+	# sysop = getSite('zh', 'wikipedia', 'sysop',
+	# 				apiErrorAutoRetries=10, httpErrorAutoRetries=50)
+	dyk = pywikibot.Page(site, u'Template:Dyk')
+	dykc = pywikibot.Page(site, u'Wikipedia:新条目推荐/候选')
+	recent = pywikibot.Page(site, u'Wikipedia:新条目推荐/上一次更新')
 	# I removed cascading protect just now.
-	archive = bot(u'Wikipedia:新条目推荐/%d年%d月' % (now.year, now.month))
-	mainpage = bot(u'Wikipedia:首页')
+	archive = pywikibot.Page(
+		site, u'Wikipedia:新条目推荐/%d年%d月' % (now.year, now.month))
+	mainpage = pywikibot.Page(site, u'Wikipedia:首页')
 	do_update = True
 	# Grab DYKC content
-	dykc_cur = dykc.current
-	dykc_cont = dykc_cur.content
+	dykc_cont = dykc.text
 	dykc_page = DYKCPage(dykc_cont, bot, clean=True, quick=True)
 	if dykc_page.count > 6:
 		DELTA = timedelta(hours=4)
@@ -434,7 +439,7 @@ def main(debug=False, error_log=None):
 	if dykc_page.count > 16:
 		DELTA = timedelta(hours=2)
 	# Confirm recent update time
-	recent_cont = recent.current.content
+	recent_cont = recent.text
 	recent_datetime = sign_re.match(recent_cont)
 	if environ.get('UPDATEDYK_FORCE'):
 		recent_datetime = 'ENV_FORCE'
@@ -456,10 +461,12 @@ def main(debug=False, error_log=None):
 	hashremove = []
 	if do_update:
 		# Recent update
-		recent += Revision(u'~~~~~')
+		# recent += Revision(u'~~~~~')
+		recent.text += '~~~~~'
 		# Grab DYK content
-		dyk_cur = dyk.current
-		dyk_cont = dyk_cur.content
+		# dyk_cur = dyk.current
+		# dyk_cont = dyk_cur.content
+		dyk_cont = dyk.text
 		dyk_page = DYKPage(dyk_cont)
 		# Check entries one by one
 		no_type = False
@@ -473,7 +480,7 @@ def main(debug=False, error_log=None):
 			# check_result checks passed, rejected, and .broken as well
 			result = entry.check_result(bot, u'Wikipedia:新条目推荐/候选', debug)
 			if debug:
-				print(result, 'BROKEN' if entry.broken else unicode(entry.template))
+				print(result, 'BROKEN' if entry.broken else str(entry.template))
 			if result is None:
 				continue
 			elif result:
@@ -500,20 +507,23 @@ def main(debug=False, error_log=None):
 				# Archive
 				if not archive.exists:
 					archive += Revision(u'{{DYKMonthlyArchive}}')
-				bot._apiRequest(
+				Request(
+					site=bot,
 					action='edit',
 					title=u'Wikipedia:新条目推荐/存档/%d年%d月' % (now.year, now.month),
 					token=lambda: bot._token('edit'),
 					prependtext=u'* %s\n' % entry.template.params['question'],
 				)  # Ditto. It's not protected anymore.
-				bot._apiRequest(
+				Request(
+					site=bot,
 					action='edit',
 					title=u'Wikipedia:新条目推荐/供稿/%d年%d月%d日' % (
 						now.year, now.month, now.day),
 					token=lambda: bot._token('edit'),
 					prependtext=u'* %s\n' % entry.template.params['question'],
 				)
-				bot._apiRequest(
+				Request(
+					site=bot,
 					action='edit',
 					title=u'Wikipedia:新条目推荐/分类存档/未分类',
 					token=lambda: bot._token('edit'),
@@ -555,7 +565,7 @@ def main(debug=False, error_log=None):
 				# Avoid doing this on a blank content?
 				talkpage_cont = dykinvite_re.sub(u'', talkpage_cont)
 				entry.template.name = u'DYKEntry/archive'
-				entry.template.params[u'revid'] = unicode(dykc_cur.id)
+				entry.template.params[u'revid'] = str(dykc_cur.id)
 				entry.template.params[u'closets'] = '{{subst:#time:U}}'
 				talkpage_ncont = u'{{DYKtalk|%d年|%d月%d日}}' % (
 					now.year, now.month, now.day)
@@ -571,14 +581,15 @@ def main(debug=False, error_log=None):
 				# continue
 				# TODO. after VPM talk ends. archive rejected
 				# Archive
-				bot._apiRequest(
+				Request(
+					site=bot,
 					action='edit',
 					title=u'Wikipedia:新条目推荐/未通过/%d年' % now.year,
 					token=lambda: bot._token('edit'),
 					prependtext=u'* %s\n' % entry.template.params['question'],
 				)
 				entry.template.name = u'DYKEntry/archive'
-				entry.template.params[u'revid'] = unicode(dykc_cur.id)
+				entry.template.params[u'revid'] = str(dykc_cur.id)
 				entry.template.params[u'closets'] = '{{subst:#time:U}}'
 				entry.template.params[u'rejected'] = u'rejected'
 				if debug:
@@ -602,7 +613,8 @@ def main(debug=False, error_log=None):
 					talkpage_ncont += entry.__unicode__(False).strip()
 					talkpage += Revision(talkpage_ncont)
 				else:
-					bot._apiRequest(
+					Request(
+						site=bot,
 						action='edit',
 						title=u'Wikipedia talk:新条目推荐/未通过/%d年' % now.year,
 						token=lambda: bot._token('edit'),
@@ -619,15 +631,15 @@ def main(debug=False, error_log=None):
 				if no_img:
 					print('NO_IMG', file=error_log)
 			# Reset recent update
-			recent += Revision(u'')
+			recent.text += ''
 		if debug:
 			print('updating dyk page')
-		dyk += Revision(unicode(dyk_page))
+		dyk.text += str(dyk_page)
 	if debug:
 		print('updating dykc page')
-	dykc_newcont = unicode(dykc_page)
+	dykc_newcont = str(dykc_page)
 	try:
-		dykc += Revision(dykc_newcont, base=dykc_cur, bot=True)
+		dykc.text += dykc_newcont
 	except PageNotSaved:
 		if debug:
 			print('(conflicted)')

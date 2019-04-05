@@ -24,7 +24,7 @@ try:
         updatedyk.maintenance()
     else:
         raise Exception('Unknown action: %s' % argv[1])
-except Exception:
+except Exception as e:
     print('TRACEBACK', file=logf)
     print(traceback.format_exc(), file=logf)
     print(ID_STR, 'TBEND', file=logf)
