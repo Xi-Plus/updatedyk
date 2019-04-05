@@ -8,10 +8,11 @@ from datetime import datetime
 CODE_DIR = dirname(__file__)
 path.append(CODE_DIR)
 
-ID_STR = '[%s-%d-%s]' % (datetime.utcnow().strftime('%Y%m%d%H%M%S'), getpid(), argv[1])
+ID_STR = '[%s-%d-%s]' % (datetime.utcnow().strftime('%Y%m%d%H%M%S'),
+                         getpid(), argv[1])
 
 logf = open(join(CODE_DIR, 'exec.log'), 'a')
-print >>logf, ID_STR, 'LOADING',
+print(ID_STR, 'LOADING', file=logf)
 
 import updatedyk
 import traceback
@@ -24,10 +25,10 @@ try:
     else:
         raise Exception('Unknown action: %s' % argv[1])
 except Exception:
-    print >>logf, 'TRACEBACK'
-    print >>logf, traceback.format_exc()
-    print >>logf, ID_STR, 'TBEND'
+    print('TRACEBACK', file=logf)
+    print(traceback.format_exc(), file=logf)
+    print(ID_STR, 'TBEND', file=logf)
 else:
-    print >>logf, 'DONE'
+    print('DONE', file=logf)
 
 logf.close()
